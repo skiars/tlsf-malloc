@@ -11,6 +11,12 @@
 #define tlsf_assert(e)      ((void)0)
 #endif
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward)
+#pragma intrinsic(_BitScanReverse)
+#endif
+
 #if __cplusplus > 199711l
 #define tlsf_static_assert  static_assert
 #else
@@ -139,15 +145,28 @@ private:
         return aligned < min_block_size ? min_block_size : aligned <= max_block_size ? aligned : 0;
     }
 
+#if defined(_MSC_VER)
+    static int ffs(unsigned x) {
+        unsigned long i;
+        return _BitScanForward(&i, x) ? i : 0;
+    }
+    static int fls(unsigned x) {
+	    unsigned long i;
+	    return _BitScanReverse(&i, x) ? i : -1;
+    }
+#elif defined(__GNUC__)
     static int ffs(unsigned x) { return __builtin_ffs(int(x)) - 1; }
     static int fls(unsigned x) {
         const int bit = x ? 32 - __builtin_clz(x) : 0;
         return bit - 1;
     }
+#else
+    #error "unsupport compiler"
+#endif
 
     static void mapping_search(std::size_t size, int &fl, int &sl) {
         if (size >= SMALL_BLOCK_SIZE)
-            size += (1 << (fls(size) - SL_INDEX_COUNT_LOG2)) - 1;
+            size += (1 << (fls(unsigned(size)) - SL_INDEX_COUNT_LOG2)) - 1;
         mapping_insert(size, fl, sl);
     }
 
@@ -156,7 +175,7 @@ private:
             fl = 0;
             sl = int(size / (SMALL_BLOCK_SIZE / SL_INDEX_COUNT));
         } else {
-            fl = fls(size);
+            fl = fls(unsigned(size));
             sl = int(size >> (fl - SL_INDEX_COUNT_LOG2)) ^ (1 << SL_INDEX_COUNT_LOG2);
             fl -= FL_INDEX_SHIFT - 1;
         }
